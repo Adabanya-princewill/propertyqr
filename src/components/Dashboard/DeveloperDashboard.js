@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import ListingForm from "./ListingForm";
-import ListingDetails from "./ListingDetails";
+//import ListingDetails from "./ListingDetails";
 import { deleteListing } from "../../redux/listingsSlice";
 import { useNavigate } from "react-router-dom";
 import QRCodeGenerator from "./QRCodeGenerator";
