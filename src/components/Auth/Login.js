@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../config/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
@@ -12,21 +12,7 @@ const Login = () => {
   const [role, setRole] = useState("developer");
   const [isSignedUp, setIsSignedUp] = useState(false); // Toggle between login and signup
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const { accountType } = userDoc.data();
-          navigate(accountType === "developer" ? "/developer-dashboard" : "/realtor-dashboard");
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-
-  // Handle Sign-Up
+   // Handle Sign-Up
   const handleSignUp = async () => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
