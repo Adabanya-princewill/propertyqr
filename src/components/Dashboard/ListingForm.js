@@ -1,42 +1,56 @@
-import React, { useState, useEffect } from "react";
-import { useDispatch } from "react-redux";
-import { addListing, editListing } from "../../redux/listingsSlice";
+import React, { useEffect, useState } from "react";
+import { db, auth } from "../../config/firebase"; // Adjust the import path as needed
+import { addDoc, collection } from "firebase/firestore";
 
-const ListingForm = ({ initialData = {}, onClose }) => {
-  const dispatch = useDispatch();
-  
-  const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-  const userBrandName = loggedInUser?.brandName || ""; // Get brandName of the developer
-  
+const ListingForm = ({ onClose, refreshListings }) => {
   const [formData, setFormData] = useState({
-    id: initialData.id || Date.now(),
-    name: initialData.name || "",
-    price: initialData.price || "",
-    contact: initialData.contact || "",
-    description: initialData.description || "",
-    brandName: userBrandName, // Add brandName to formData
+    name: "",
+    price: "",
+    contact: "",
+    description: ""
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    // Set the brandName in case it's updated
-    setFormData((prevData) => ({
-      ...prevData,
-      brandName: userBrandName,
-    }));
-  }, [userBrandName]);
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setUserId(user.uid);
+        console.log(user.uid);
+      } else {
+        setUserId(null);
+      }
+    });  
+
+    return () => unsubscribe();
+  }, []);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value
+    }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (initialData.id) {
-      dispatch(editListing(formData));
-    } else {
-      dispatch(addListing(formData));
+    setIsSubmitting(true);
+
+    try {
+      await addDoc(collection(db, "listings"), {
+        ...formData,
+        ownerId: userId,
+        createdAt: new Date()
+      });
+      console.log("Listing added successfully");
+      refreshListings();
+      onClose();
+    } catch (error) {
+      console.error("Error adding listing:", error);
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -44,31 +58,40 @@ const ListingForm = ({ initialData = {}, onClose }) => {
       <input
         type="text"
         name="name"
-        placeholder="Property Name"
         value={formData.name}
         onChange={handleChange}
+        placeholder="Name"
+        required
       />
       <input
-        type="text"
+        type="number"
         name="price"
-        placeholder="Price"
         value={formData.price}
         onChange={handleChange}
+        placeholder="Price"
+        required
       />
       <input
-        type="text"
+        type="number"
         name="contact"
-        placeholder="Contact"
         value={formData.contact}
         onChange={handleChange}
+        placeholder="Contact"
+        required
       />
       <textarea
         name="description"
-        placeholder="Description"
         value={formData.description}
         onChange={handleChange}
+        placeholder="Description"
+        required
       />
-      <button type="submit">{initialData.id ? "Update" : "Add"} Listing</button>
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Adding..." : "Add Listing"}
+      </button>
+      <button type="button" onClick={onClose} style={{ marginLeft: "10px" }}>
+        Cancel
+      </button>
     </form>
   );
 };

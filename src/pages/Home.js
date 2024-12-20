@@ -8,10 +8,7 @@ const Home = () => {
             <p>Manage your property listings and access information easily with QR codes.</p>
             <div className="home-actions">
                 <Link to="/login">
-                    <button>Login</button>
-                </Link>
-                <Link to="/create-account">
-                    <button>Register</button>
+                    <button>Let's get started</button>
                 </Link>
             </div>
         </div>

@@ -1,63 +1,133 @@
 import React, { useEffect, useState } from "react";
-import { useSelector, useDispatch } from "react-redux";
 import ListingForm from "./ListingForm";
-//import ListingDetails from "./ListingDetails";
-import { deleteListing } from "../../redux/listingsSlice";
-import { useNavigate } from "react-router-dom";
 import QRCodeGenerator from "./QRCodeGenerator";
+import { useNavigate } from "react-router-dom";
+import { auth, db } from "../../config/firebase";
+import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 
 const DeveloperDashboard = () => {
-    const listings = useSelector((state) => state.listings.listings);
-    const [isEditing, setIsEditing] = useState(null);
-    const [currentUser, setCurrentUser] = useState({});
-    const dispatch = useDispatch();
+    const [currentUser, setCurrentUser] = useState(null);
+    const [listings, setListings] = useState([]);
+    const [isAddingListing, setIsAddingListing] = useState(false); // Track form visibility
+    const [isLoading, setIsLoading] = useState(true);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        // Retrieve user data from localStorage
-        const user = JSON.parse(localStorage.getItem("loggedInUser"));
-        setCurrentUser(user);
-       // console.log("User Info:", user); // Log user info to console
-    }, []);
-
     const currentUrl = window.location.origin;
-   // console.log(window.location.origin);
 
-    const handleDelete = (id) => {
-        dispatch(deleteListing(id));
+
+
+    useEffect(() => {
+        const fetchCurrentUser = async (user) => {
+            if (user) {
+                const userDocRef = doc(db, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    setCurrentUser({
+                        userId: user.uid,
+                        email: user.email,
+                        brandName: userDoc.data().brandName || "DefaultBrand",
+                    });
+                } else {
+                    console.error("User document not found in Firestore");
+                }
+            }
+        };
+
+        const fetchListings = async (user) => {
+            if (user) {
+                const q = query(
+                    collection(db, "listings"),
+                    where("ownerId", "==", user.uid)
+                );
+                const snapshot = await getDocs(q);
+                const userListings = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+                setListings(userListings);
+            }
+        };
+
+        const listenToAuthChanges = () => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    setIsLoading(true);
+                    await fetchCurrentUser(user);
+                    await fetchListings(user);
+                } else {
+                    navigate("/login");
+                }
+                setIsLoading(false);
+            });
+        };
+
+        listenToAuthChanges();
+    }, [navigate]);
+
+    const handleAddListing = () => {
+        setIsAddingListing(true);
     };
+
+    const handleFormClose = () => {
+        setIsAddingListing(false);
+    };
+
+    const refreshListings = async () => {
+        if (currentUser) {
+            const q = query(
+                collection(db, "listings"),
+                where("ownerId", "==", currentUser.userId)
+            );
+            const snapshot = await getDocs(q);
+            const listingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setListings(listingsData);
+        }
+    };
+
+    const logout = async () => {
+        try {
+          await signOut(auth);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+    if (isLoading) return <p>Loading...</p>;
 
     return (
         <div>
-            <h1>Welcome, {currentUser.brandName}.</h1>
+            <button type="button" onClick={logout}>log out</button>
+            <h1>Welcome, {currentUser?.brandName}.</h1>
             <h2>Your Listings</h2>
-            <button onClick={() => setIsEditing({})}>Add New Listing</button>
+            <button onClick={handleAddListing}>Add New Listing</button>
 
-            {isEditing && (
-                <ListingForm
-                    initialData={isEditing}
-                    onClose={() => setIsEditing(null)}
-                />
+            {/* Conditionally render the ListingForm */}
+            {isAddingListing && (
+                <div style={{ margin: "20px 0", padding: "10px", border: "1px solid #ccc" }}>
+                    <h3>Add a New Listing</h3>
+                    <ListingForm onClose={handleFormClose} id={currentUser.uid} refreshListings={refreshListings} />
+                </div>
             )}
 
-            {listings.map((listing) => (
-                <div key={listing.id}>
-                    <h3>{listing.name}</h3>
-                    <p>Price: {listing.price}</p>
-                    <p>Contact: {listing.contact}</p>
-                    <button onClick={() => navigate(`/listing/${listing.id}`)}>
-                        View
-                    </button>
-                    <button onClick={() => setIsEditing(listing)}>Edit</button>
-                    <button onClick={() => handleDelete(listing.id)}>Delete</button>
+            {listings.length === 0 ? (
+                <p>No listings found. Add a new listing to get started!</p>
+            ) : (
+                listings.map((listing) => (
+                    <div key={listing.id}>
+                        <h3>{listing.name}</h3>
+                        <p>Price: {listing.price}</p>
+                        <p>Contact: {listing.contact}</p>
+                        <button onClick={() => navigate(`/listing/${listing.id}`)}>View</button>
 
-                    <div>
-                        <QRCodeGenerator
-                            url={`${currentUrl}/${currentUser.brandName}/${listing.id}`} // Change to localhost for local testing
-                        />
+                        <div>
+                            <QRCodeGenerator
+                                url={`${currentUrl}/${currentUser?.brandName.replace(/\s+/g, '')}/${listing.id}`}
+                            />
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))
+            )}
         </div>
     );
 };
